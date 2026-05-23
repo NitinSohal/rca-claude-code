@@ -4,7 +4,7 @@
 
 **Owner:** Nitin Sohal (<nitin19sohal@gmail.com>)
 **Repo:** https://github.com/NitinSohal/rca-claude-code
-**Stage:** Brainstorming — Section 1 of 6 of the design has been approved. Sections 2–6 are pending. **No code has been written yet.**
+**Stage:** Design complete — all 6 sections of the design are approved. Awaiting final user review of the written spec, then we move to the implementation plan. **No application code has been written yet.**
 **Last updated:** 2026-05-22
 
 ---
@@ -26,25 +26,23 @@ Primary surface is a **dashboard**. CLI and Grafana webhook are secondary entry 
 
 ## How to continue this work (read this if you're a future agent or contributor)
 
-This project is mid-brainstorm. The brainstorming skill flow is:
+The brainstorming skill flow is:
 
 1. ✅ Explore project context
 2. ✅ Scope check (single spec, no decomposition)
 3. ✅ Clarifying questions (8 rounds — all decisions captured below)
 4. ✅ Propose 2–3 approaches (Approach 1 — SDK-native subagents — chosen)
-5. 🔄 Present design in sections (Section 1 done, Sections 2–6 pending)
-6. ⬜ Write design doc — partially complete at [`docs/superpowers/specs/2026-05-22-rca-agent-design.md`](docs/superpowers/specs/2026-05-22-rca-agent-design.md)
-7. ⬜ Spec self-review
+5. ✅ Present design in sections (all 6 done)
+6. ✅ Write design doc — at [`docs/superpowers/specs/2026-05-22-rca-agent-design.md`](docs/superpowers/specs/2026-05-22-rca-agent-design.md)
+7. 🔄 Spec self-review (about to run)
 8. ⬜ User reviews written spec
 9. ⬜ Invoke writing-plans skill to create implementation plan
 
 **To pick up where we left off:**
 
 - Read this README end to end.
-- Read [`docs/superpowers/specs/2026-05-22-rca-agent-design.md`](docs/superpowers/specs/2026-05-22-rca-agent-design.md).
-- Invoke `/superpowers:brainstorming` (or its equivalent) and resume from Section 2.
-- Each remaining section needs the user's sign-off before moving to the next.
-- After Section 6, run spec self-review, get the user's final approval on the spec file, then invoke `superpowers:writing-plans`.
+- Read [`docs/superpowers/specs/2026-05-22-rca-agent-design.md`](docs/superpowers/specs/2026-05-22-rca-agent-design.md) — that's the authoritative design.
+- The next step is the user's final review of the written spec; after approval, invoke `superpowers:writing-plans` to produce the implementation plan.
 
 **Do not start writing code yet.** The hard gate is: full design approved → implementation plan written → only then implementation.
 
@@ -76,6 +74,26 @@ This project is mid-brainstorm. The brainstorming skill flow is:
 | 20 | Data access from app → Loki/Prom/CW | **Through Grafana datasource proxy only.** Never direct. One `GRAFANA_SERVICE_ACCOUNT_TOKEN` is the only credential. Loki/Prom/AWS creds stay inside Grafana. |
 | 21 | Datasource UIDs | Auto-discovered from `GET /api/datasources` at startup; env-overridable |
 | 22 | Portability | Every host-specific value is an env var. `.env.example` is the manifest. Anyone clones, edits `.env`, runs `docker compose up`. |
+| 23 | Subagent prompt context | Each subagent gets full prose of `infra.md` (prompt-cached), its own YAML block, and a stripped index of peers (name + description). Synthesizer gets the full file. |
+| 24 | `depends_on` use | Drives synthesizer's `dependency_graph` reasoning + powers a `lookup_dependency` intra-cycle tool. |
+| 25 | Subagent output | Strict JSON schema; Zod-validated. |
+| 26 | Pre-fetch budgets | ≤500 log lines (1KB max each), ≤100 LTTB-downsampled points per metric, ~15K-token ceiling per subagent. |
+| 27 | Quorum rule | ≥6 of 9 subagents must succeed; otherwise run marked `degraded` and synthesizer skipped. |
+| 28 | Per-subagent timeout | 90s. One retry on 5xx / Grafana tool failure. Schema-validation failure is final. |
+| 29 | Past-RCA similarity | Component-keyed Mongo lookup, recency-sorted top 3, resolution notes joined. Embeddings deferred to phase 3. |
+| 30 | Expansion direction | Backward only: `from` walks back by `WINDOW_STEP_MINUTES`, `to` stays fixed. |
+| 31 | Manual auto-expand | OFF by default; opt-in toggle on the UI form. |
+| 32 | Baseline detector | 30-min pre-fire avg vs. last-5-min avg; relative tolerance 20%; absolute fallback when baseline ≈ 0. |
+| 33 | UI streaming | Server-Sent Events from `GET /api/runs/:id/stream`. |
+| 34 | Inter-iteration backoff | `BACKOFF_MS=5000` between iterations; semaphore caps in-flight Grafana calls at 10. |
+| 35 | Circuit breaker | Per-target in-memory state in `OutboundCallGuard`; opens after 5 failures within 60s, half-opens after 30s. |
+| 36 | Slack failure handling | **Never blocks RCA.** Creates a persistent event the user must acknowledge or fix. |
+| 37 | Events panel | Mongo `events` collection + UI notification center. Every external-op failure produces a durable, visible event with severity, source, suggested fix, and acknowledge/ignore actions. |
+| 38 | Auto-resolve | Outstanding `unacknowledged` events for a `(source, operation)` pair flip to `resolved` when the next call of the same kind succeeds. |
+| 39 | Logging | `pino` structured JSON to stdout only. Logs ≠ events: logs for grep, events for UI. |
+| 40 | Health endpoints | `/healthz` (status of grafana/mongo/claude_auth + unacknowledged event counts) and `/readyz` (gates Docker startup). |
+| 41 | Test layers | Vitest unit + integration (`nock` + `mongodb-memory-server`) + E2E with stubbed Claude via `ClaudeClient` wrapper. No UI tests in v1. |
+| 42 | CI | GitHub Actions: lint + typecheck + unit/integration + `docker compose build` on every PR; E2E on `main`. |
 
 ---
 
@@ -193,40 +211,20 @@ services:
 
 ---
 
-## Open questions — sections 2–6 of the design still to do
+## Where each design decision lives
 
-Each of these is a section of the design that still needs the user's input and sign-off. Do **not** skip ahead and implement.
+All six sections of the design are approved and detailed in the spec file. Quick map:
 
-### Section 2 — Component & infra MD format
-- Exact schema of each component's YAML block (proposal: `name`, `type`, `loki_selector`, `prom_selector`, `cw_namespace`, `depends_on[]`)
-- How the prose part of `infra.md` is referenced by subagents (full doc as cached context vs. just the component's section)
-- How "depends_on" is used by subagents to follow upstream / downstream
+| Section | Topic | Spec anchor |
+|---|---|---|
+| 1 | Architecture overview, stack, env, repo layout | §1 |
+| 2 | `infra.md` format + per-component YAML schema | §2 |
+| 3 | Subagents, coordinator, synthesizer, quorum, token budget | §3 |
+| 4 | Expand-window loop, Stop hook, baseline detection, SSE streaming | §4 |
+| 5 | Error handling, circuit breakers, logging, the persistent events panel | §5 |
+| 6 | Testing strategy (Vitest, stubbed Claude, fixture set) | §6 |
 
-### Section 3 — Subagent + coordinator design
-- Subagent `.md` file structure (system prompt, allowed tools, output schema)
-- Coordinator's responsibilities (parallel spawn, aggregation, retry handling)
-- Synthesizer prompt design (input = N subagent outputs + past similar RCAs from Mongo; output = structured RCA with confidence + evidence links)
-- Token budget per call; prompt-caching strategy for the infra MD
-
-### Section 4 — The expand-window loop in detail
-- `Stop` hook decision logic — exact predicates for "keep going" vs "stop"
-- How to detect "spike resolved" via Grafana Alerting state polling
-- How to detect "metric back to baseline" (rolling avg over last N minutes vs. pre-spike value)
-- Failure modes: max iterations, API rate limits, partial results
-- Streaming intermediate output to the UI so the user sees progress
-
-### Section 5 — Error handling, observability, security
-- Per-call retries, timeouts, circuit-breaking on Grafana
-- Logging strategy (structured logs, where they go)
-- Secrets handling in Docker (env vs Docker secrets)
-- What happens if Mongo is down? Slack is down? Grafana is down?
-- Rate-limit guard for Claude
-
-### Section 6 — Testing strategy
-- Unit tests for tool wrappers (mock Grafana responses)
-- Integration tests for the coordinator (fixture: 9 fake subagents)
-- E2E tests with a recorded Grafana session
-- How to test the expand-window loop deterministically
+The full spec is at [`docs/superpowers/specs/2026-05-22-rca-agent-design.md`](docs/superpowers/specs/2026-05-22-rca-agent-design.md).
 
 ---
 
