@@ -13,9 +13,11 @@
     "validate-infra": "tsx src/cli/cli.module.ts validate-infra"
   },
   "dependencies": {
-    "@rca/agent": "workspace:*"
+    "@rca/agent": "workspace:*",
+    "js-yaml": "4.1.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "4.0.9",
     "tsx": "4.19.2"
   }
 }
