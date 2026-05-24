@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EnvSchema } from '../src/schemas/env';
+import { ComponentSchema } from '../src/schemas/component';
 
 describe('EnvSchema', () => {
   it('accepts a minimal valid config', () => {
@@ -32,5 +33,39 @@ describe('EnvSchema', () => {
     });
     expect(parsed.WINDOW_INITIAL_HOURS).toBe(6);
     expect(parsed.RCA_CONFIDENCE_THRESHOLD).toBe(0.9);
+  });
+});
+
+describe('ComponentSchema', () => {
+  const base = {
+    name: 'auth-service',
+    type: 'service' as const,
+    description: 'Validates JWTs',
+    loki: { selector: '{service="auth-service"}' },
+  };
+  it('accepts a minimal service component with loki', () => {
+    expect(() => ComponentSchema.parse(base)).not.toThrow();
+  });
+  it('rejects if no data source is configured', () => {
+    expect(() =>
+      ComponentSchema.parse({ name: 'x', type: 'service', description: 'd' }),
+    ).toThrow(/at least one data source/);
+  });
+  it('rejects non-kebab-case names', () => {
+    expect(() => ComponentSchema.parse({ ...base, name: 'AuthService' })).toThrow();
+    expect(() => ComponentSchema.parse({ ...base, name: 'auth_service' })).toThrow();
+  });
+  it('accepts depends_on as a list of names', () => {
+    const parsed = ComponentSchema.parse({ ...base, depends_on: ['postgres-primary', 'redis-cache'] });
+    expect(parsed.depends_on).toEqual(['postgres-primary', 'redis-cache']);
+  });
+  it('accepts full prometheus + cloudwatch config', () => {
+    expect(() =>
+      ComponentSchema.parse({
+        ...base,
+        prometheus: { metrics: [{ name: 'request_rate', query: 'sum(rate(x[5m]))' }] },
+        cloudwatch: { namespace: 'AWS/ECS', dimensions: { ClusterName: 'prod', ServiceName: 'auth' }, metrics: ['CPUUtilization'] },
+      }),
+    ).not.toThrow();
   });
 });
