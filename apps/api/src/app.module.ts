@@ -11,6 +11,7 @@ import { GrafanaModule } from './grafana/grafana.module';
 import { ExpandLoopModule } from './expand-loop/expand-loop.module';
 import { RcaModule } from './rca/rca.module';
 import { RunsModule } from './runs/runs.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { RunsModule } from './runs/runs.module';
     ExpandLoopModule,
     RcaModule,
     RunsModule,
+    WebhookModule,
     HealthModule,
   ],
 })
