@@ -63,3 +63,64 @@ export function parseInfraMarkdown(md: string): ValidatedInfra {
   }
   return { prose, components: out };
 }
+
+export interface ValidationOptions {
+  maxComponents: number;
+}
+
+export interface ValidationResult extends ValidatedInfra {
+  warnings: string[];
+}
+
+export function validateInfra(md: string, opts: ValidationOptions): ValidationResult {
+  const { prose, components } = parseInfraMarkdown(md);
+
+  if (components.length > opts.maxComponents) {
+    throw new Error(`MAX_COMPONENTS exceeded: ${components.length} > ${opts.maxComponents}`);
+  }
+
+  const names = new Set(components.map((c) => c.name));
+  for (const c of components) {
+    for (const dep of c.depends_on ?? []) {
+      if (!names.has(dep)) {
+        throw new Error(`Component "${c.name}" depends_on unknown component "${dep}"`);
+      }
+    }
+  }
+
+  const cycles = findCycles(components);
+  const warnings = cycles.map((c) => `cycle in depends_on: ${c.join(' → ')}`);
+
+  return { prose, components, warnings };
+}
+
+function findCycles(components: Component[]): string[][] {
+  const graph = new Map<string, string[]>();
+  for (const c of components) graph.set(c.name, c.depends_on ?? []);
+
+  const cycles: string[][] = [];
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<string, number>();
+  components.forEach((c) => color.set(c.name, WHITE));
+
+  function dfs(node: string, stack: string[]): void {
+    color.set(node, GRAY);
+    stack.push(node);
+    for (const next of graph.get(node) ?? []) {
+      const c = color.get(next) ?? WHITE;
+      if (c === GRAY) {
+        const idx = stack.indexOf(next);
+        cycles.push([...stack.slice(idx), next]);
+      } else if (c === WHITE) {
+        dfs(next, stack);
+      }
+    }
+    stack.pop();
+    color.set(node, BLACK);
+  }
+
+  for (const c of components) {
+    if ((color.get(c.name) ?? WHITE) === WHITE) dfs(c.name, []);
+  }
+  return cycles;
+}
