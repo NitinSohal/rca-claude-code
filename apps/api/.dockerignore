@@ -1,0 +1,6 @@
+node_modules
+dist
+test
+coverage
+.eslintrc.cjs
+tsconfig.tsbuildinfo
