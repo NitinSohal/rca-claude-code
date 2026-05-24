@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { EnvSchema } from '../src/schemas/env';
 import { ComponentSchema } from '../src/schemas/component';
+import { SubagentOutputSchema } from '../src/schemas/subagent-output';
+import { RcaOutputSchema } from '../src/schemas/rca-output';
 
 describe('EnvSchema', () => {
   it('accepts a minimal valid config', () => {
@@ -65,6 +67,60 @@ describe('ComponentSchema', () => {
         ...base,
         prometheus: { metrics: [{ name: 'request_rate', query: 'sum(rate(x[5m]))' }] },
         cloudwatch: { namespace: 'AWS/ECS', dimensions: { ClusterName: 'prod', ServiceName: 'auth' }, metrics: ['CPUUtilization'] },
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('SubagentOutputSchema', () => {
+  it('accepts a healthy minimal output', () => {
+    const ok = SubagentOutputSchema.parse({
+      component: 'auth-service',
+      status: 'healthy',
+      confidence: 0.95,
+      findings: [],
+      suspected_dependencies: [],
+      notes: 'nothing unusual',
+    });
+    expect(ok.status).toBe('healthy');
+  });
+  it('rejects confidence > 1', () => {
+    expect(() =>
+      SubagentOutputSchema.parse({
+        component: 'x',
+        status: 'failed',
+        confidence: 1.5,
+        findings: [],
+        suspected_dependencies: [],
+        notes: '',
+      }),
+    ).toThrow();
+  });
+  it('requires findings[].evidence[] shape', () => {
+    expect(() =>
+      SubagentOutputSchema.parse({
+        component: 'x',
+        status: 'failed',
+        confidence: 0.5,
+        findings: [{ summary: 's', severity: 'error', evidence: [{ type: 'log' }] }],
+        suspected_dependencies: [],
+        notes: '',
+      }),
+    ).toThrow();
+  });
+});
+
+describe('RcaOutputSchema', () => {
+  it('accepts a full RCA payload', () => {
+    expect(() =>
+      RcaOutputSchema.parse({
+        summary: 's',
+        root_cause: { component: 'postgres-primary', description: 'd', confidence: 0.8 },
+        contributing_factors: [],
+        timeline: [{ ts: '2026-05-22T09:12:30Z', event: 'connection pool exhausted' }],
+        evidence: [{ component: 'postgres-primary', type: 'metric', ref: 'pg_active', excerpt: '100/100' }],
+        suggested_next_steps: ['raise pool'],
+        similar_past_rcas: [],
       }),
     ).not.toThrow();
   });
