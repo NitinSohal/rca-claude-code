@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "data": {
+    "resultType": "matrix",
+    "result": [
+      {
+        "metric": { "service": "auth-service" },
+        "values": [
+          [1716364800, "10.5"],
+          [1716364860, "11.2"],
+          [1716364920, "12.0"]
+        ]
+      }
+    ]
+  }
+}

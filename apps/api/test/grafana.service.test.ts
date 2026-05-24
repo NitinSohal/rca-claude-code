@@ -73,3 +73,53 @@ describe('GrafanaService.queryLoki', () => {
     expect(r.lines.length).toBe(2);
   });
 });
+
+const promFixture = JSON.parse(
+  readFileSync(join(__dirname, 'fixtures/grafana/prom-rate.json'), 'utf8'),
+);
+const cwFixture = JSON.parse(
+  readFileSync(join(__dirname, 'fixtures/grafana/cw-cpu.json'), 'utf8'),
+);
+
+describe('GrafanaService.queryProm', () => {
+  it('returns [ts, value] tuples and downsamples to limit', async () => {
+    nock('https://g')
+      .post('/api/datasources/proxy/uid/p-uid/api/v1/query_range')
+      .reply(200, promFixture);
+    const svc = new GrafanaService(
+      { baseUrl: 'https://g', token: 't', uids: { loki: 'l', prom: 'p-uid', cw: 'c' } },
+      new OutboundCallGuard(sink),
+    );
+    const r = await svc.queryProm({
+      promql: 'sum(rate(x[5m]))',
+      from: '2026-05-22T08:00:00Z',
+      to: '2026-05-22T09:00:00Z',
+      step: '15s',
+      maxPoints: 100,
+    });
+    expect(r.points.length).toBe(3);
+    expect(r.points[0]).toEqual([1716364800, 10.5]);
+  });
+});
+
+describe('GrafanaService.queryCloudWatch', () => {
+  it('parses the dataframe response shape', async () => {
+    nock('https://g')
+      .post('/api/datasources/proxy/uid/c-uid/cloudwatch/metrics/query')
+      .reply(200, cwFixture);
+    const svc = new GrafanaService(
+      { baseUrl: 'https://g', token: 't', uids: { loki: 'l', prom: 'p', cw: 'c-uid' } },
+      new OutboundCallGuard(sink),
+    );
+    const r = await svc.queryCloudWatch({
+      namespace: 'AWS/ECS',
+      dimensions: { ClusterName: 'prod', ServiceName: 'auth' },
+      metric: 'CPUUtilization',
+      from: '2026-05-22T08:00:00Z',
+      to: '2026-05-22T09:00:00Z',
+      maxPoints: 100,
+    });
+    expect(r.points.length).toBe(3);
+    expect(r.points[0][1]).toBe(42.1);
+  });
+});
