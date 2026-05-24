@@ -25,7 +25,8 @@
     "pino": "9.5.0",
     "pino-http": "10.3.0",
     "reflect-metadata": "0.2.2",
-    "rxjs": "7.8.1"
+    "rxjs": "7.8.1",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/js-yaml": "4.0.9",
