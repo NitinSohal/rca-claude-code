@@ -226,6 +226,8 @@ All six sections of the design are approved and detailed in the spec file. Quick
 
 The full spec is at [`docs/superpowers/specs/2026-05-22-rca-agent-design.md`](docs/superpowers/specs/2026-05-22-rca-agent-design.md).
 
+- Implementation plan: [docs/superpowers/specs/2026-05-22-rca-agent-implementation-plan.md](docs/superpowers/specs/2026-05-22-rca-agent-implementation-plan.md)
+
 ---
 
 ## How to run (once implementation exists — placeholder)
