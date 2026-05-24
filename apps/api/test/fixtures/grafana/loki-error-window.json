@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "data": {
+    "resultType": "streams",
+    "result": [
+      {
+        "stream": { "service": "auth-service", "level": "error" },
+        "values": [
+          ["1716364800000000000", "auth-service ERROR connection refused"],
+          ["1716364860000000000", "auth-service ERROR timeout"]
+        ]
+      }
+    ],
+    "stats": {}
+  }
+}
