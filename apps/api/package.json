@@ -1,0 +1,21 @@
+{
+  "name": "@rca/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "start:dev": "tsx watch src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "cli": "tsx src/cli/cli.module.ts",
+    "validate-infra": "tsx src/cli/cli.module.ts validate-infra"
+  },
+  "dependencies": {
+    "@rca/agent": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.19.2"
+  }
+}
