@@ -1,0 +1,38 @@
+services:
+  rca-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: rca-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      INFRA_MD_PATH: /app/infra/infra.md
+      CLAUDE_CONFIG_DIR: /root/.claude
+      PORT: 8080
+    volumes:
+      - ./infra:/app/infra:ro
+      - ${CLAUDE_CONFIG_DIR_HOST:-${HOME}/.claude}:/root/.claude:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  rca-ui:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: rca-ui
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://rca-api:8080
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      rca-api:
+        condition: service_healthy
