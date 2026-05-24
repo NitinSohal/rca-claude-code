@@ -105,3 +105,36 @@ describe('RcasRepo', () => {
     expect(recent).toHaveLength(3);
   });
 });
+
+import { EventsRepo } from '../src/mongo/events.repo';
+
+describe('EventsRepo', () => {
+  it('inserts an event and auto-resolves prior unack events for same source+op', async () => {
+    const repo = new EventsRepo(svc.db());
+    await repo.insert({
+      severity: 'critical',
+      source: 'slack',
+      operation: 'post_message',
+      message: 'fail 1',
+    });
+    await repo.insert({
+      severity: 'critical',
+      source: 'slack',
+      operation: 'post_message',
+      message: 'fail 2',
+    });
+    const open = await repo.listUnacknowledged();
+    expect(open.length).toBe(2);
+
+    await repo.autoResolve('slack', 'post_message');
+    const after = await repo.listUnacknowledged();
+    expect(after.length).toBe(0);
+  });
+
+  it('counts by severity', async () => {
+    const repo = new EventsRepo(svc.db());
+    await repo.insert({ severity: 'warn', source: 'grafana', operation: 'op-a', message: 'x' });
+    const counts = await repo.countsBySeverity();
+    expect(counts.warn).toBeGreaterThanOrEqual(1);
+  });
+});
