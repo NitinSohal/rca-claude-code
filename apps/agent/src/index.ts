@@ -8,3 +8,4 @@ export * from './stub-claude-client';
 export * from './lttb';
 export * from './baseline';
 export * from './real-claude-client';
+export * from './prompt-builder';
